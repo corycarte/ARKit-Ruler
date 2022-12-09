@@ -12,6 +12,9 @@ import ARKit
 class ViewController: UIViewController, ARSCNViewDelegate {
 
     @IBOutlet var sceneView: ARSCNView!
+    let dotRadius = 0.005
+    var dotNodes = [SCNNode]()
+    var textNode = SCNNode()
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -19,14 +22,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         // Set the view's delegate
         sceneView.delegate = self
         
-        // Show statistics such as fps and timing information
-        sceneView.showsStatistics = true
-        
-        // Create a new scene
-        let scene = SCNScene(named: "art.scnassets/ship.scn")!
-        
-        // Set the scene to the view
-        sceneView.scene = scene
+        sceneView.debugOptions = [ARSCNDebugOptions.showFeaturePoints]
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -45,30 +41,81 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         // Pause the view's session
         sceneView.session.pause()
     }
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if dotNodes.count >= 2 {
+            for dot in dotNodes {
+                dot.removeFromParentNode()
+            }
+            textNode.removeFromParentNode()
+            dotNodes = [SCNNode]()
+        } else {
+            if let touchLocation = touches.first?.location(in: sceneView) {
+                // TODO: Use raycasting
+                let hitTestResults = sceneView.hitTest(touchLocation, types: .featurePoint)
+                
+                if let hitResult = hitTestResults.first {
+                    addDot(at: hitResult)
+                }
+            }
+        }
+    }
+    
+    // TODO: Use raycasting
+    func addDot(at location : ARHitTestResult) {
+        // Create sphere
+        let dot = SCNSphere(radius: dotRadius)
 
-    // MARK: - ARSCNViewDelegate
-    
-/*
-    // Override to create and configure nodes for anchors added to the view's session.
-    func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-        let node = SCNNode()
-     
-        return node
-    }
-*/
-    
-    func session(_ session: ARSession, didFailWithError error: Error) {
-        // Present an error message to the user
+        // Create material and assign to geometry
+        let dotMaterial = SCNMaterial()
+        dotMaterial.diffuse.contents = UIColor.red
         
-    }
-    
-    func sessionWasInterrupted(_ session: ARSession) {
-        // Inform the user that the session has been interrupted, for example, by presenting an overlay
+        dot.materials = [dotMaterial]
         
+        // Create node and assign geometry to it
+        let dotNode = SCNNode(geometry: dot)
+        dotNode.position = SCNVector3(x: location.worldTransform.columns.3.x,
+                                      y: (location.worldTransform.columns.3.y + Float(dotRadius / 2)),
+                                       z: location.worldTransform.columns.3.z)
+
+        sceneView.scene.rootNode.addChildNode(dotNode)
+                
+        dotNodes.append(dotNode)
+        
+        if dotNodes.count >= 2 { calculate() }
     }
     
-    func sessionInterruptionEnded(_ session: ARSession) {
-        // Reset tracking and/or remove existing anchors if consistent tracking is required
+    func calculate() {
+        print("Calculate distance")
+        let start = dotNodes[0]
+        let end = dotNodes[1]
+                
+        // Calculate distance in 3D space
+        // with a, b, c known
+        // distance = sqrt(a^2 + b^2 + c^2)
         
+        let a = end.position.x - start.position.x
+        let b = end.position.y - start.position.y
+        let c = end.position.z - start.position.z
+        
+        let distance = sqrt(Double(
+            pow(a, 2) +
+            pow(b,2) +
+            pow(c,2)
+        ))
+        
+        updateText(String(abs(distance)), at: end.position)
+    }
+    
+    func updateText(_ text: String, at position: SCNVector3) {
+        let textGeometry = SCNText(string: text, extrusionDepth: 1.0)
+        textGeometry.firstMaterial?.diffuse.contents = UIColor.red
+        
+        textNode = SCNNode(geometry: textGeometry)
+        
+        textNode.position = SCNVector3(x: position.x, y: position.y + 0.01, z: position.z)
+        textNode.scale = SCNVector3(x: 0.01, y: 0.01, z: 0.01)
+        
+        sceneView.scene.rootNode.addChildNode(textNode)
     }
 }
